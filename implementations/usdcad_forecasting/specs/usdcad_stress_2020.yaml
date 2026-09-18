@@ -1,0 +1,56 @@
+# Regime-stress spec — the 2020 COVID shock, NUMERICAL METHODS ONLY.
+#
+# ⚠️ Keep the notebook's LLM-Process predictors OFF for this window. 2020 is
+# BEFORE the Gemini training cutoff (~Jan 2025), so an LLM has effectively
+# seen information about this historical period. Scoring an LLMP here would
+# measure historical recall rather than a genuine out-of-sample forecast.
+#
+# The notebook enforces "numerical only" in code: its predictors cell gates the
+# LLMP variants on a post-cutoff flag that is False for this config.
+#
+# This stress test is used to study how conventional forecasting methods behave
+# during a highly volatile exchange-rate regime and whether macro covariates
+# provide an advantage during periods of market stress.
+#
+# Prerequisites:
+#   uv run python scripts/fetch_fred.py
+#
+# Primary target:
+#   FRED DEXCAUS — USD/CAD exchange rate (Canadian dollars per U.S. dollar).
+
+spec_id: usdcad_stress_2020
+
+description: >-
+  COVID-shock regime stress (numerical methods only): daily origins Feb–Apr
+  2020, forecasting USD/CAD forward cumulative log returns at 1/5/21
+  business days.
+
+tasks:
+  - task_id: usdcad_logret_1b
+    target_series_id: usdcad_logret_1b
+    horizons: [1]
+    frequency: B
+    description: >-
+      USD/CAD forward cumulative log return, 1 business day ahead
+      (next-session return / direction).
+
+  - task_id: usdcad_logret_5b
+    target_series_id: usdcad_logret_5b
+    horizons: [5]
+    frequency: B
+    description: >-
+      USD/CAD forward cumulative log return, 5 business days ahead
+      (forward 1-week return).
+
+  - task_id: usdcad_logret_21b
+    target_series_id: usdcad_logret_21b
+    horizons: [21]
+    frequency: B
+    description: >-
+      USD/CAD forward cumulative log return, 21 business days ahead
+      (forward 1-month return).
+
+start: "2020-02-03"
+end: "2020-04-30"
+stride: 1            # daily origins across the COVID shock
+warmup: 250

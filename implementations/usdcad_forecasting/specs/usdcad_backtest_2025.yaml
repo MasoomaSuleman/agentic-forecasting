@@ -1,0 +1,59 @@
+# Main backtest spec — weekly origins across 2025 (post-cutoff).
+#
+# 2025 is after the Gemini training cutoff (~Jan 2025), so this is the window
+# where conventional methods AND the LLM-Process can be compared fairly.
+# The LLM has not been trained specifically on the outcomes from this
+# evaluation window.
+#
+# Use this as the primary iteration window. Spend the protected 2026 eval
+# (`usdcad_eval_2026.yaml`) sparingly on a curated set of finalists.
+#
+# This spec carries experiment design only (window + one single-horizon task
+# per target). The predictor roster and hyperparameters live in the notebook.
+#
+# Note: LLMP predictors are token-heavy over ~50 weekly origins. The notebook
+# can trim the predictor list before enabling the full comparison.
+#
+# Primary target:
+#   FRED DEXCAUS — USD/CAD exchange rate (Canadian dollars per U.S. dollar).
+#
+# Target variables:
+#   usdcad_logret_1b  — 1-business-day forward log return
+#   usdcad_logret_5b  — 5-business-day forward log return
+#   usdcad_logret_21b — 21-business-day forward log return.
+
+spec_id: usdcad_backtest_2025
+
+description: >-
+  Main multivariate comparison: weekly origins across 2025 (post-cutoff),
+  forecasting USD/CAD forward cumulative log returns at 1/5/21 business days.
+
+tasks:
+  - task_id: usdcad_logret_1b
+    target_series_id: usdcad_logret_1b
+    horizons: [1]
+    frequency: B
+    description: >-
+      USD/CAD forward cumulative log return, 1 business day ahead
+      (next-session return / direction).
+
+  - task_id: usdcad_logret_5b
+    target_series_id: usdcad_logret_5b
+    horizons: [5]
+    frequency: B
+    description: >-
+      USD/CAD forward cumulative log return, 5 business days ahead
+      (forward 1-week return).
+
+  - task_id: usdcad_logret_21b
+    target_series_id: usdcad_logret_21b
+    horizons: [21]
+    frequency: B
+    description: >-
+      USD/CAD forward cumulative log return, 21 business days ahead
+      (forward 1-month return).
+
+start: "2025-01-06"
+end: "2025-12-22"
+stride: 5            # weekly origins (~50)
+warmup: 250

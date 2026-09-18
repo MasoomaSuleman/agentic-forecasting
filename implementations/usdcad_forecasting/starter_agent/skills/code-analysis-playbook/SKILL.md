@@ -42,12 +42,10 @@ between your low and high quantiles — wider when recent volatility is high.
 
 ## Domain focus (edit this for your use case)
 
-For a BoC rate decision your payload is categorical: it carries the policy-rate
-change points, the per-outcome base rates, and a macro snapshot — not a price
-CSV, so adapt the parsing above to those fields. Useful diagnostics: recompute
-the empirical base rates, measure how far the current macro snapshot sits from
-typical pre-cut vs pre-hold conditions, and count how often the Bank reversed
-direction between adjacent meetings.
+For S&P 500 log-returns, the series is near-unforecastable in the mean: recent
+realised volatility is far more predictable than direction. Let recent vol, not a
+directional hunch, set the *width* of your quantile bands, and keep the point
+forecast close to zero unless you have real signal.
 
 ## Room to grow
 

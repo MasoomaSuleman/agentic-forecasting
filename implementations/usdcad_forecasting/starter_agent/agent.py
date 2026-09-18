@@ -1,8 +1,7 @@
-"""BoC starter agent — a fresh, hackable template for your own exploration.
+"""S&P 500 starter agent — a fresh, hackable template for your own exploration.
 
-This is **not** part of the notebook 01–03 curriculum. It is a clean starting
-point: the smallest agent that still has room to grow. It ships with our common
-building blocks wired behind simple toggles —
+This is the S&P 500 use case's **first** agent, and it is deliberately minimal:
+a clean starting point with our common building blocks behind simple toggles —
 
 - **optional news search** (``enable_search``, on by default) — bounded,
   cutoff-aware Google Search through the Vector proxy;
@@ -14,11 +13,11 @@ building blocks wired behind simple toggles —
 Everything routes through the Vector proxy — no direct provider keys. See
 ``planning-docs/vector-llm-proxy.md``.
 
-The prompt builder and output schema are reused from the
-:mod:`~boc_rate_decisions.analyst_agent` module (they are just task
-serialisation — no need to duplicate them); the *agent identity* here is fresh
-and yours to edit. The output is a calibrated distribution over
-``cut / hold / hike``. Pair this with ``99_starter_agent.ipynb``.
+This use case had no agent to borrow a prompt builder from, so
+:class:`Sp500StarterPromptBuilder` below is a small, self-contained serialiser —
+read it, then extend it (more covariates, richer panels, report context). The
+target is a single-horizon cumulative log return; the output is a probabilistic
+forecast of that return. Pair this with ``99_starter_agent.ipynb``.
 
 Module-level ``__getattr__`` exposes ``root_agent`` lazily so ``adk web`` can
 load this module for interactive (schema-free) use.
@@ -30,11 +29,13 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+import pandas as pd
 from aieng.forecasting.data.context import ForecastContext
+from aieng.forecasting.evaluation.prediction import STANDARD_QUANTILES
 from aieng.forecasting.evaluation.task import ForecastingTask
 from aieng.forecasting.methods.agentic import (
     AgentPredictor,
-    CategoricalAgentForecastOutput,
+    ContinuousAgentForecastOutput,
     build_adk_agent,
 )
 from aieng.forecasting.methods.agentic.agent_factory import (
@@ -43,10 +44,7 @@ from aieng.forecasting.methods.agentic.agent_factory import (
     ContextRetrievalConfig,
 )
 from aieng.forecasting.models import LITE_MODEL
-
-# Reuse the existing BoC prompt builder — it serialises the rate path, decision
-# history, and macro snapshot into the agent's JSON payload.
-from boc_rate_decisions.analyst_agent import BoCDecisionPromptBuilder
+from pydantic import BaseModel
 
 
 # Skills live next to this module.
@@ -54,6 +52,59 @@ _SKILLS_ROOT = Path(__file__).parent / "skills"
 _FORECASTING_SKILL = _SKILLS_ROOT / "forecasting"
 _RESEARCH_SKILL = _SKILLS_ROOT / "research-playbook"
 _CODE_ANALYSIS_SKILL = _SKILLS_ROOT / "code-analysis-playbook"
+
+
+# ---------------------------------------------------------------------------
+# Prompt builder (self-contained — this use case has no analyst_agent to reuse)
+# ---------------------------------------------------------------------------
+
+
+class Sp500StarterPromptBuilder(BaseModel):
+    """Serialise the target log-return series (+ optional covariate snapshot).
+
+    Minimal on purpose: the recent history of the cumulative-log-return target,
+    the task spec, the exact quantile grid, and — when ``covariate_series_ids``
+    are supplied and present in the context — the latest value of each covariate
+    as a leak-safe macro snapshot. Implements the
+    :class:`~aieng.forecasting.methods.agentic.predictor.ForecastPromptBuilder`
+    protocol structurally — extend it with richer covariate panels.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    history: int = 64
+    covariate_series_ids: list[str] = []
+
+    def __call__(self, *, task: ForecastingTask, context: ForecastContext) -> str:
+        df = context.get_series(task.target_series_id).tail(self.history)
+        rows = ["date,log_return"] + [
+            f"{pd.Timestamp(ts).date()},{float(v):.6f}" for ts, v in zip(df["timestamp"], df["value"])
+        ]
+
+        covariate_snapshot: dict[str, float] = {}
+        for cov_id in self.covariate_series_ids:
+            try:
+                cov_df = context.get_series(cov_id)
+            except Exception:  # noqa: BLE001 — a missing covariate just drops out of the snapshot
+                continue
+            if not cov_df.empty:
+                covariate_snapshot[cov_id] = round(float(cov_df["value"].iloc[-1]), 6)
+
+        payload: dict[str, Any] = {
+            "task": task.task_id,
+            "as_of": str(context.as_of)[:10],
+            "horizons": list(task.horizons),
+            "standard_quantiles": list(STANDARD_QUANTILES),
+            "target_summary": {
+                "last_log_return": float(df["value"].iloc[-1]),
+                "last_date": str(pd.Timestamp(df["timestamp"].iloc[-1]).date()),
+                "n_obs": int(len(df)),
+            },
+            "target_history_csv": "\n".join(rows),
+        }
+        if covariate_snapshot:
+            payload["covariate_snapshot"] = covariate_snapshot
+        return json.dumps(payload, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -73,17 +124,17 @@ def _build_starter_instruction() -> str:
     """
     return (
         "## Role\n\n"
-        "You are a Bank of Canada monetary-policy analyst — fluent in the "
-        "policy-rate path, the 2% CPI inflation target, labour-market and "
-        "bond-market conditions, and the Bank's institutional behaviour "
-        "(gradualism, data dependence, reluctance to surprise markets). This is "
-        "a starter agent: keep your reasoning transparent and your claims honest.\n\n"
+        "You are an equity-market analyst — fluent in the rate path and Fed "
+        "guidance, inflation and jobs data, volatility and credit conditions, "
+        "and how macro catalysts move the S&P 500. This is a starter agent: keep "
+        "your reasoning transparent and your claims honest, and remember returns "
+        "are close to a random walk.\n\n"
         "## How to respond\n\n"
         "- For open-ended questions, scenario analysis, or anything "
         "conversational, answer directly and concisely — do NOT ask for a JSON "
         "payload.\n"
-        "- When you are handed a task that asks for a structured probability "
-        "distribution over the next decision, produce a calibrated one."
+        "- When you are handed a task that asks for a structured probabilistic "
+        "forecast, produce a calibrated one."
     )
 
 
@@ -91,13 +142,12 @@ _STARTER_INSTRUCTION = _build_starter_instruction()
 
 
 _CONTEXT_RETRIEVAL_INSTRUCTION = """\
-You are a Canadian monetary-policy intelligence specialist with web search.
+You are an equity-market intelligence specialist with web search.
 
 Return a concise structured markdown summary (3-5 paragraphs) covering, as the
-query warrants: recent Bank of Canada communications (statements, speeches,
-Monetary Policy Reports); Canadian CPI and core inflation vs the 2% target; the
-labour market; market pricing of the upcoming decision (OIS, economist surveys);
-and macro shocks relevant to Canada (oil, exchange rate, US policy, trade).
+query warrants: the rate path and Fed guidance; recent inflation and jobs data;
+the VIX and credit spreads; earnings-season tone; and major geopolitical or
+policy shocks.
 
 Ground every claim in the search results you actually retrieve. When a cutoff
 date is specified, never report or speculate about events after it.
@@ -125,7 +175,7 @@ def build_starter_agent_config(
     enable_search: bool = True,
     enable_code_exec: bool = False,
 ) -> AgentConfig:
-    """Build the BoC starter :class:`AgentConfig`.
+    """Build the S&P 500 starter :class:`AgentConfig`.
 
     Parameters
     ----------
@@ -136,9 +186,7 @@ def build_starter_agent_config(
         Model for the bounded web-search sub-tool.
     enable_search : bool, default=True
         Wire a cutoff-aware ``search_web`` tool and load the
-        ``research-playbook`` skill. Proxy-only — no extra API key. Note: news
-        grounding on historical origins carries leakage risk, so keep
-        `cutoff_date` honest.
+        ``research-playbook`` skill. Proxy-only — no extra API key.
     enable_code_exec : bool, default=False
         Wire an E2B Python sandbox and load the ``code-analysis-playbook``
         skill. Needs ``E2B_API_KEY`` and is slower, so it is off by default.
@@ -167,7 +215,7 @@ def build_starter_agent_config(
     )
 
     return AgentConfig(
-        name="boc_starter_agent",
+        name="sp500_starter_agent",
         model=model,
         instruction=_STARTER_INSTRUCTION,
         # 16k headroom: enough for a complete run_code script + structured output.
@@ -201,31 +249,43 @@ class _StarterForecastPromptBuilder:
     def __call__(self, *, task: ForecastingTask, context: ForecastContext) -> str:
         payload = json.loads(self._inner(task=task, context=context))
         payload["instructions"] = (
-            "Produce a calibrated probability distribution for this decision and return "
-            "it by calling `set_model_response` with a `json_response` string matching "
+            "Produce a calibrated probabilistic forecast for this task and return it by "
+            "calling `set_model_response` with a `json_response` string matching "
             "`output_schema` exactly."
         )
         payload["output_schema"] = self._schema_json
         return json.dumps(payload, indent=2)
 
 
-def build_starter_agent_predictor(config: AgentConfig) -> AgentPredictor:
+def build_starter_agent_predictor(
+    config: AgentConfig,
+    *,
+    covariate_series_ids: list[str] | None = None,
+) -> AgentPredictor:
     """Wrap a starter :class:`AgentConfig` in an :class:`AgentPredictor`.
 
-    Reuses :class:`~boc_rate_decisions.analyst_agent.BoCDecisionPromptBuilder`
-    for data serialisation, wrapped so the (drift-free) categorical output schema
-    and a forecast directive ride in the payload — keeping the schema out of the
-    persona. ``predict(task, context)`` returns one
-    :class:`~aieng.forecasting.evaluation.prediction.Prediction` carrying the
-    cut/hold/hike distribution.
+    Wraps :class:`Sp500StarterPromptBuilder` so the (drift-free) continuous
+    output schema and a forecast directive ride in the payload — keeping the
+    schema out of the persona. ``predict(task, context)`` returns one
+    :class:`~aieng.forecasting.evaluation.prediction.Prediction` for the task's
+    single horizon.
+
+    Parameters
+    ----------
+    config : AgentConfig
+        A config from :func:`build_starter_agent_config`.
+    covariate_series_ids : list[str] or None
+        Covariates to include as a leak-safe snapshot in the prompt. They must be
+        registered on the data service used to build the context. ``None`` keeps
+        the starter target-only.
     """
     return AgentPredictor(
         agent_config=config,
         prompt_builder=_StarterForecastPromptBuilder(
-            BoCDecisionPromptBuilder(),
-            CategoricalAgentForecastOutput.prompt_schema_json(labels=["cut", "hold", "hike"]),
+            Sp500StarterPromptBuilder(covariate_series_ids=covariate_series_ids or []),
+            ContinuousAgentForecastOutput.prompt_schema_json(),
         ),
-        output_schema=CategoricalAgentForecastOutput,
+        output_schema=ContinuousAgentForecastOutput,
     )
 
 

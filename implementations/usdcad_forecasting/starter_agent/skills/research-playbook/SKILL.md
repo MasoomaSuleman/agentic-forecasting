@@ -37,11 +37,10 @@ current news is not stripped.
 
 ## Domain focus (edit this for your use case)
 
-For a Bank of Canada rate decision, the signals that move the odds: recent CPI
-and core-inflation prints vs the 2% target, the labour market (employment,
-unemployment, wages), market pricing (overnight index swaps, economist surveys),
-recent BoC communications, and macro shocks (oil, the loonie, US policy, trade).
-Search for the *current state* of these, then let the base rates set the prior.
+For S&P 500 returns, the signals: the rate path and Fed guidance, recent
+inflation and jobs prints, the VIX and credit spreads, earnings-season tone, and
+major geopolitical or policy shocks. Search for the *current state* of these,
+then remember returns are close to a random walk — be humble about direction.
 
 ## Room to grow
 
