@@ -1,0 +1,38 @@
+# Source: implementations/energy_oil_forecasting/specs/energy_oil_eval.yaml
+
+kind: yaml
+
+```yaml
+# Energy Oil Eval Spec — 2026 Prospective Competition
+#
+# Runs on 18 weekly origins from Feb 2, 2026 to Jun 1, 2026.
+# Covers the high-volatility Persian Gulf geopolitical price shock and its
+# aftermath. The end date is set to the latest origin whose longest horizon
+# (21 business days) still resolves against available data — keep it at
+# most 21 business days behind the most recent cached WTI price (see
+# scripts/fetch_wti.py) so every origin fully resolves.
+# Target is WTI Crude Oil price (yfinance ticker: CL=F).
+# Horizons: 5, 10, 21 business days.
+
+spec_id: energy_oil_eval
+
+description: >-
+  Prospective/out-of-sample evaluation period in 2026 for daily WTI crude oil.
+  Evaluates selected contender models on 18 weekly origins from the early 2026
+  geopolitical price shock through its aftermath, to measure adaptive
+  real-time forecasting performance.
+
+tasks:
+  - task_id: wti_oil_price_forecast
+    target_series_id: wti_crude_oil_price
+    horizons: [5, 10, 21]
+    frequency: B
+    description: >-
+      WTI Crude Oil continuous front-month futures Close price (yfinance symbol: CL=F),
+      projected 5, 10, and 21 trading days ahead.
+
+start: "2026-02-02"
+end: "2026-06-01"
+stride: 5
+warmup: 250
+```

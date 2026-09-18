@@ -1,0 +1,67 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0  # Use the ref you want to point at
+    hooks:
+    - id: trailing-whitespace
+    - id: check-ast
+    - id: check-builtin-literals
+    - id: check-docstring-first
+      # One-off scripts and exploration code often use docstrings + comments differently
+      # than library modules; keep this check for packages under aieng-forecasting/aieng/.
+      exclude: ^(scripts|implementations)/
+    - id: check-executables-have-shebangs
+    - id: debug-statements
+    - id: end-of-file-fixer
+    - id: mixed-line-ending
+      args: [--fix=lf]
+    - id: fix-byte-order-marker
+    - id: check-merge-conflict
+    - id: check-symlinks
+    - id: detect-private-key
+    - id: check-yaml
+      args: [--unsafe]
+    - id: check-toml
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.8
+    hooks:
+      - id: uv-lock
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.14
+    hooks:
+    - id: ruff-check
+      args: [--fix, --exit-non-zero-on-fix]
+      # Library + tests: strict. Scripts/notebooks: rules relaxed via pyproject per-file-ignores.
+      types_or: [python, jupyter]
+    - id: ruff-format
+      types_or: [python, jupyter]
+
+  # Typecheck only the installed aieng package (same as `make lint`). Uses the project venv via uv;
+  # system `python3 -m mypy` does not see mypy and is wrong for this repo.
+  - repo: local
+    hooks:
+      - id: mypy-aieng
+        name: mypy (aieng package)
+        entry: uv run mypy -p aieng
+        language: system
+        pass_filenames: false
+        files: ^(aieng-forecasting/aieng/|pyproject\.toml|aieng-forecasting/pyproject\.toml)
+
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.9.1
+    hooks:
+    - id: nbqa-ruff
+      args: [--fix, --exit-non-zero-on-fix, --ignore=D100, --ignore=B018]
+
+ci:
+    autofix_commit_msg: |
+        [pre-commit.ci] Add auto fixes from pre-commit.com hooks
+
+        for more information, see https://pre-commit.ci
+    autofix_prs: true
+    autoupdate_branch: ''
+    autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+    autoupdate_schedule: weekly
+    skip: [mypy-aieng]
+    submodules: false

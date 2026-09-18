@@ -1,0 +1,150 @@
+[project]
+name = "agentic-forecasting-bootcamp"
+version = "0.1.0"
+description = ""
+authors = [ {name = "Vector AI Engineering", email = "ai_engineering@vectorinstitute.ai"}]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "agentic-forecasting-implementations",
+    "lightgbm>=4.0.0",
+    "ipykernel>=7.3.0",
+    "jupyter>=1.1.1",
+    "prophet>=1.1",
+    "plotly>=6.8.0",
+]
+
+[project.urls]
+repository = "https://github.com/VectorInstitute/agentic-forecasting"
+
+[dependency-groups]
+dev = [
+    "aieng-platform-onboard>=0.7.3",
+    "codecov>=2.1.13",
+    "e2b>=2.29.6",
+    "mypy>=2.1.0",
+    "nbqa>=1.9.1",
+    "pip-audit>=2.10.1",
+    "pre-commit>=4.6.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
+    "ruff>=0.15.19",
+]
+
+# Default dependency groups to be installed
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.workspace]
+members = [
+  "aieng-forecasting",
+  "implementations",
+]
+
+[tool.uv.sources]
+agentic-forecasting-implementations = { workspace = true }
+aieng-forecasting = { workspace = true }
+
+[tool.mypy]
+ignore_missing_imports = true
+install_types = true
+pretty = true
+namespace_packages = true
+explicit_package_bases = true
+non_interactive = true
+warn_unused_configs = true
+allow_any_generics = false
+allow_subclassing_any = false
+allow_untyped_calls = false
+allow_untyped_defs = false
+allow_incomplete_defs = false
+check_untyped_defs = true
+allow_untyped_decorators = false
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+implicit_reexport = false
+strict_equality = true
+extra_checks = true
+
+[tool.ruff]
+include = ["*.py", "pyproject.toml", "*.ipynb"]
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = [
+    "A", # flake8-builtins
+    "B", # flake8-bugbear
+    "COM", # flake8-commas
+    "C4", # flake8-comprehensions
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "ICN", # flake8-import-conventions
+    "Q", # flake8-quotes
+    "RSE", # flake8-raise
+    "D", # pydocstyle
+    "E", # pycodestyle
+    "F", # pyflakes
+    "I", # isort
+    "W", # pycodestyle
+    "N", # pep8-naming
+    "ERA", # eradicate
+    "PL", # pylint
+]
+fixable = ["A", "B", "COM", "C4", "RET", "SIM", "ICN", "Q", "RSE", "D", "E", "F", "I", "W", "N", "ERA", "PL"]
+ignore = [
+    "B905", # `zip()` without an explicit `strict=` parameter
+    "E501", # line too long
+    "D203", # 1 blank line required before class docstring
+    "D213", # Multi-line docstring summary should start at the second line
+    "PLR2004", # Replace magic number with named constant
+    "PLR0913", # Too many arguments
+    "COM812", # Missing trailing comma
+    "N999", # Invalid module name — conflicts with numbered notebook naming convention (01_*, 02_*)
+]
+
+# Ignore import violations in all `__init__.py` files.
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401", "F403", "F811"]
+# Scripts and notebooks: sys.path hacks, lighter docstring rules, and ERA001 suppressed
+# (commented-out code detection is too aggressive for exploratory/one-off code).
+"scripts/**" = ["D1", "E402", "W505", "ERA001"]
+"implementations/**" = ["D1", "E402", "W505", "ERA001"]
+# Playground: throwaway exploration/diagnostics. Same relaxations as scripts,
+# plus PLC0415 (optional deps are imported inside try/except by design) and
+# PLR0917 (archived notebooks predate the positional-arg cap).
+"playground/**" = ["D1", "E402", "W505", "ERA001", "PLC0415", "PLR0917"]
+# Repo-root integration tests: optional extras imported inside try/except.
+"tests/**" = ["D1", "E402", "W505", "ERA001", "PLC0415"]
+
+[tool.ruff.lint.pep8-naming]
+ignore-names = ["X*", "setUp"]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 88
+
+[tool.pytest.ini_options]
+markers = [
+    "integration_test: marks tests as integration tests",
+]
+
+[tool.coverage]
+    [tool.coverage.run]
+    source=["aieng-forecasting/aieng"]
+    omit=["aieng-forecasting/tests/*", "implementations/tests/*", "*__init__.py"]
+
+[tool.setuptools.packages.find]
+exclude = ["data*", "playground*", "reference_specs*", "docs*", "scripts*", "planning_docs*"]

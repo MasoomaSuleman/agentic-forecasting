@@ -1,0 +1,58 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Lint & Test
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Vscode
+.vscode
+
+# macos
+*.DS_Store
+
+# ipynb checkpoints
+**.ipynb_checkpoints
+
+.env
+.cursor/
+
+# Local data cache (populated by scripts/fetch_*.py; not committed)
+# The leading slash anchors each entry to the repo root so it doesn't match
+# source directories like aieng-forecasting/aieng/forecasting/data/
+/data/
+# Test artifact: adapter fixture used to resolve cache_dir relative to cwd
+/aieng-forecasting/data/
+# Guard against notebooks inadvertently creating a cache here if run with a
+# stale relative path (the canonical cache location is /data/ at repo root)
+/implementations/data/
+# implementation-level data caches (e.g. food_price_forecasting/data/)
+implementations/**/data/
+# Allow committed reference prediction outputs for reference implementations
+!implementations/energy_oil_forecasting/data/
+!implementations/energy_oil_forecasting/data/predictions/
+!implementations/energy_oil_forecasting/data/predictions/**
+
+# workspace-specific agents
+.github/agents/
+.github/prompts/
+
+# google adk
+**/.adk/
+
+# local-only backup (not pushed)
+.local-backup/
+
+**/presentations
+data/yfinance/
+
+.claude/

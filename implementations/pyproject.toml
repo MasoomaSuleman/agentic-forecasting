@@ -1,0 +1,21 @@
+# Local-only install, not published. Notebook-only folders and tests/ are excluded
+# from packaging.
+[project]
+name = "agentic-forecasting-implementations"
+version = "0.1.0"
+description = "Reference method implementations for the Agentic Forecasting Bootcamp"
+authors = [{name = "Vector AI Engineering", email = "ai_engineering@vectorinstitute.ai"}]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aieng-forecasting[numerical,llm,agentic,documents]",
+    "beautifulsoup4>=4.12,<5",  # BoC press-release HTML extraction (boc_rate_decisions.press_releases)
+]
+
+[tool.setuptools.packages.find]
+where = ["."]          # treat implementations/ as the src root
+exclude = ["tests*"]
+# getting_started/ is mostly notebooks; only concierge_agent/ is packaged.
+
+[tool.uv.sources]
+aieng-forecasting = { workspace = true }
