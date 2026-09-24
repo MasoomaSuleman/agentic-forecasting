@@ -17,7 +17,7 @@ from aieng.forecasting.evaluation.task import ForecastingTask
 from aieng.forecasting.methods.agentic import AgentPredictor, ContinuousAgentForecastOutput, build_adk_agent
 from aieng.forecasting.methods.agentic.agent_factory import AgentConfig, CodeExecutionConfig, ContextRetrievalConfig
 from aieng.forecasting.models import LITE_MODEL
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 _SKILLS_ROOT = Path(__file__).parent / "skills"
 _FORECASTING_SKILL = _SKILLS_ROOT / "forecasting"
@@ -78,7 +78,8 @@ def _build_starter_instruction() -> str:
         "- Separate observed evidence from interpretation and never use information after the forecast cutoff.\n"
         "- When submitting a structured forecast, call set_model_response exactly once with a json_response containing valid JSON that matches output_schema.\n"
         "- The json_response value must be raw JSON, not a JSON-encoded string inside another JSON object. Do not add markdown fences, comments, trailing commas, or backslash-escaped punctuation.\n"
-        "- Use double quotes for every JSON key and string. Keep quantiles as the exact structure specified by output_schema."
+        "- Use double quotes for every JSON key and string. Keep quantiles as the exact structure specified by output_schema.\n"
+        "- Before submitting, self-check that forecasts is non-empty, every requested horizon appears exactly once, all standard quantiles appear exactly once, quantile values are non-decreasing, and point_forecast equals the 0.50 quantile."
     )
 
 _STARTER_INSTRUCTION = _build_starter_instruction()
@@ -147,33 +148,55 @@ class _StarterForecastPromptBuilder:
             "by calling set_model_response with a json_response string matching output_schema exactly. "
             "The json_response itself must be valid JSON: use double quotes, no markdown fences, "
             "no comments, no trailing commas, and no backslash-escaped punctuation. Do not wrap "
-            "the JSON in another JSON object or return it as a Python/JSON repr."
+            "the JSON in another JSON object or return it as a Python/JSON repr. "
+            "Before submitting, verify that forecasts is non-empty, horizons are unique and exactly "
+            "match the requested horizons, all standard quantiles are present exactly once, quantile "
+            "values are non-decreasing, and point_forecast equals the 0.50 quantile."
         )
         payload["output_schema"] = self._schema_json
         return json.dumps(payload, indent=2)
 
 
 class _RetryingAgentPredictor:
-    """Retry transient malformed structured-output responses."""
+    """Retry transient or invalid structured-output responses."""
 
     def __init__(self, predictor: AgentPredictor, max_retries: int = 2, retry_delay: float = 1.0) -> None:
         self._predictor = predictor
-        self._max_retries = max_retries
-        self._retry_delay = retry_delay
+        self._max_retries = max(0, int(max_retries))
+        self._retry_delay = max(0.0, float(retry_delay))
+
+    @staticmethod
+    def _validate_predictions(task: ForecastingTask, predictions: list[Any]) -> None:
+        """Reject successful-but-empty or incomplete conversion results."""
+        if not predictions:
+            raise ValueError("Agent returned no predictions after structured-output parsing.")
+        expected = list(task.horizons)
+        actual = [getattr(pred, "forecast_date", None) for pred in predictions]
+        if len(predictions) != len(expected):
+            raise ValueError(
+                f"Expected {len(expected)} predictions for horizons {expected}, got {len(predictions)}."
+            )
+        if any(value is None for value in actual):
+            raise ValueError("Agent returned a prediction without a forecast_date.")
 
     def predict(self, task: ForecastingTask, context: ForecastContext):
         attempts = self._max_retries + 1
+        last_error: Exception | None = None
         for attempt in range(1, attempts + 1):
             try:
-                return self._predictor.predict(task, context)
-            except json.JSONDecodeError:
+                predictions = self._predictor.predict(task, context)
+                self._validate_predictions(task, predictions)
+                return predictions
+            except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+                last_error = exc
                 if attempt == attempts:
                     raise
                 print(
-                    f"    Structured-output JSON parse failed; retrying "
-                    f"({attempt}/{self._max_retries})..."
+                    f"    Structured-output validation failed; retrying "
+                    f"({attempt}/{self._max_retries}): {type(exc).__name__}: {exc}"
                 )
                 time.sleep(self._retry_delay * attempt)
+        raise RuntimeError("Agent failed to produce a valid structured forecast") from last_error
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._predictor, name)
