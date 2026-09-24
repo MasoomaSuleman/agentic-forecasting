@@ -6,6 +6,7 @@ FRED macro covariates and cutoff-aware web research.
 
 from __future__ import annotations
 import json
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -152,13 +153,39 @@ class _StarterForecastPromptBuilder:
         return json.dumps(payload, indent=2)
 
 
+class _RetryingAgentPredictor:
+    """Retry transient malformed structured-output responses."""
+
+    def __init__(self, predictor: AgentPredictor, max_retries: int = 2, retry_delay: float = 1.0) -> None:
+        self._predictor = predictor
+        self._max_retries = max_retries
+        self._retry_delay = retry_delay
+
+    def predict(self, task: ForecastingTask, context: ForecastContext):
+        attempts = self._max_retries + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._predictor.predict(task, context)
+            except json.JSONDecodeError:
+                if attempt == attempts:
+                    raise
+                print(
+                    f"    Structured-output JSON parse failed; retrying "
+                    f"({attempt}/{self._max_retries})..."
+                )
+                time.sleep(self._retry_delay * attempt)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._predictor, name)
+
+
 def build_starter_agent_predictor(
     config: AgentConfig,
     *,
     covariate_series_ids: list[str] | None = None,
 ) -> AgentPredictor:
-    """Create an AgentPredictor for USD/CAD probabilistic forecasting."""
-    return AgentPredictor(
+    """Create a resilient AgentPredictor for USD/CAD probabilistic forecasting."""
+    predictor = AgentPredictor(
         agent_config=config,
         prompt_builder=_StarterForecastPromptBuilder(
             UsdcadStarterPromptBuilder(covariate_series_ids=covariate_series_ids or []),
@@ -166,6 +193,7 @@ def build_starter_agent_predictor(
         ),
         output_schema=ContinuousAgentForecastOutput,
     )
+    return _RetryingAgentPredictor(predictor)
 
 
 def __getattr__(name: str) -> Any:
