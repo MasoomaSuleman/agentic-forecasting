@@ -74,7 +74,10 @@ def _build_starter_instruction() -> str:
         "- For open-ended questions, answer directly and concisely; do not ask for a JSON payload.\n"
         "- For a structured probabilistic forecast, use the forecasting skill and produce a calibrated distribution.\n"
         "- DEXCAUS is Canadian dollars per US dollar: positive return means USD/CAD rises and USD strengthens relative to CAD.\n"
-        "- Separate observed evidence from interpretation and never use information after the forecast cutoff."
+        "- Separate observed evidence from interpretation and never use information after the forecast cutoff.\n"
+        "- When submitting a structured forecast, call set_model_response exactly once with a json_response containing valid JSON that matches output_schema.\n"
+        "- The json_response value must be raw JSON, not a JSON-encoded string inside another JSON object. Do not add markdown fences, comments, trailing commas, or backslash-escaped punctuation.\n"
+        "- Use double quotes for every JSON key and string. Keep quantiles as the exact structure specified by output_schema."
     )
 
 _STARTER_INSTRUCTION = _build_starter_instruction()
@@ -140,7 +143,10 @@ class _StarterForecastPromptBuilder:
         payload = json.loads(self._inner(task=task, context=context))
         payload["instructions"] = (
             "Produce a calibrated probabilistic forecast for this task and return it "
-            "by calling set_model_response with a json_response string matching output_schema exactly."
+            "by calling set_model_response with a json_response string matching output_schema exactly. "
+            "The json_response itself must be valid JSON: use double quotes, no markdown fences, "
+            "no comments, no trailing commas, and no backslash-escaped punctuation. Do not wrap "
+            "the JSON in another JSON object or return it as a Python/JSON repr."
         )
         payload["output_schema"] = self._schema_json
         return json.dumps(payload, indent=2)
